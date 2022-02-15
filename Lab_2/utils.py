@@ -4,8 +4,11 @@ import signal
 import math
 import RPi.GPIO as GPIO # README: https://pypi.org/project/RPi.GPIO/
 from itertools import cycle
+from decimal import Decimal
+from matplotlib import pyplot as plt
+import numpy as np
 import PID
-
+import threading
 
 # The servo hat uses its own numbering scheme within the Adafruit library.
 # 0 represents the first servo, 1 for the second, and so on.
@@ -15,35 +18,16 @@ RSERVO = 0
 LENCODER = 17
 RENCODER = 18
 
-ipsLeftCurrent=0
-ipsRightCurrent=0
 
 
-def initPID():
+global pidL, pidR
+def initPID(P,I,D):
     global pidL, pidR
-    P=0.1
-    I=0.001
-    D=0
     pidL = PID.PID(P,I,D)
     pidR = PID.PID(P,I,D)
     pidL.SetPoint=0
     pidR.SetPoint=0
-
-
-# This function is called when Ctrl+C is pressed.
-# It's intended for properly exiting the program.
-def ctrlC(signum, frame):
-    print("Exiting")
-
-    # Stop the servos
-
-
-    GPIO.cleanup()
-    setSpeedsPWM (1.5,1.495)
-    exit()
-
-# Attach the Ctrl+C signal interrupt
-signal.signal(signal.SIGINT, ctrlC)
+    # return pidL, pidR
 
 def initMotors():
     global pwm
@@ -52,18 +36,25 @@ def initMotors():
 
     # 50Hz is used for the frequency of the servos.
     pwm.set_pwm_freq(50)
+    setSpeedsPWM (1.5,1.495)
     return pwm
 
 def remap(value, fromLow, fromHigh, toLow, toHigh):
     fromRange = (fromHigh - fromLow)
     toRange= (toHigh - toLow)
     newValue = (((value - fromLow) * toRange) / fromRange) + toLow
-    # newValue=round(newValue,3)
+    newValue=round(newValue,3)
     return newValue
 
 def clamp(value, low, high):
     return max(min(high, value), low)
 
+
+def closest(lst, K):
+
+     lst = np.asarray(lst)
+     idx = (np.abs(lst - K)).argmin()
+     return idx
 
 def moveXV(X,V):
     travel_time=abs(X/V)
@@ -84,6 +75,9 @@ def moveXV(X,V):
                 time_elapsed=round(time.time()-start_time,3)
                 distance_elapsed=round(ticks_elapsed*0.255254,3)
                 print("{} seconds pased, moved {} inches".format(time_elapsed,distance_elapsed))
+                x=getSpeeds()
+                print(round(x[0]*2*math.pi*1.3,2))
+                print(round(x[1]*2*math.pi*1.3,2))
 
             ticks_elapsed=(getCounts()[1]+getCounts()[0])/2
 
@@ -94,11 +88,23 @@ def moveXV(X,V):
         print("Requested velocity is not able to be set, movement cancelled\n")
         setSpeedsPWM (1.5,1.495)
 
+wheel_diam=1.3 #Wheel diameter in inches
 
+maxIPS=5
+maxRPS=maxIPS/(2*math.pi*wheel_diam)
+
+
+pwmMapL=[1.448,1.453,1.458,1.463,1.468,1.473,1.478,1.483,1.488,1.493,1.498,1.503,1.508,1.513,1.518,1.523,1.528,1.533,1.538,1.543,1.548,1.553,1.558,1.563]
+ipsMapL=[-4.65,-4.2,-3.75,-3.3,-2.85,-2.4,-1.94,-1.583,-1.123,-0.638,-0.153,0,0,0.1786,0.63,1.123,1.601,2.075,2.45,2.9,3.35,3.8,4.25,4.7]
+
+pwmMapR=[1.443,1.448,1.453,1.458,1.463,1.468,1.473,1.478,1.483,1.488,1.493,1.498,1.503,1.508,1.513,1.518,1.523,1.528,1.533,1.538,1.543,1.548,1.553,1.558,1.563]
+ipsMapR=[-4.65,-4.2,-3.75,-3.3,-2.85,-2.4,-1.94,-1.48,-1.05,-0.613,-0.077,0,0,0.08,0.48,0.89,1.4,1.813,2.25,2.7,3.15,3.6,4.05,4.5,4.95]
 
 
 def setSpeedsPWM (pwmLeft, pwmRight):
-    global pidL, pidR
+    global pwmLeftCurrent, pwmRightCurrent
+
+
     Lcal=0
     Rcal=0
 
@@ -110,9 +116,8 @@ def setSpeedsPWM (pwmLeft, pwmRight):
     # pwmRight=clamp(pwmRight,minPWM,maxPWM)
         status=False
     else:
-        #print(pidL.SetPoint,getSpeeds()[0],"\t",pidR.SetPoint,getSpeeds()[1])
-        pwmLeft=round(pwmLeft,5)
-        pwmRight=round(pwmRight,5)
+        pwmLeftCurrent=pwmLeft
+        pwmRightCurrent=pwmRight
         #print("Setting motor speed in PWM, left: {} right: {}".format(pwmLeft,pwmRight))
         pwm.set_pwm(LSERVO, 0, math.floor(pwmLeft / 20 * 4096));
         pwm.set_pwm(RSERVO, 0, math.floor(pwmRight / 20 * 4096));
@@ -122,46 +127,77 @@ def setSpeedsPWM (pwmLeft, pwmRight):
 
 
 def setSpeedsRPS (rpsLeft, rpsRight):
-    #print("Setting motor speed in RPS, left: {} right: {}".format(rpsLeft,rpsRight))
-    minRPS=-0.8
-    maxRPS=0.8
-    # rpsLeft=clamp(rpsLeft,minRPS,maxRPS)
-    # rpsRight=clamp(rpsRight,minRPS,maxRPS)
+    global maxRPS
+    global wheel_diam
 
-    rpsLeft=clamp(rpsLeft,minRPS,maxRPS)
-    rpsRight=clamp(rpsRight,minRPS,maxRPS)
-
-    ipsLeft=rpsLeft*2*math.pi*1.3
-    ipsRight=rpsRight*2*math.pi*1.3
-
-    setSpeedsIPS(ipsLeft,ipsRight)
+    if abs(rpsLeft)>maxRPS or abs(rpsRight)>maxRPS:
+        print("Not able to set motor speed to RPS, left: {} right: {}".format(rpsLeft,rpsRight))
+        status=False
+    else:
+        ipsLeft=(2*math.pi*wheel_diam)*rpsLeft
+        ipsRight=(2*math.pi*wheel_diam)*rpsRight
+        setSpeedsIPS(ipsLeft,ipsRight)
+    return status
 
 
+def setSpeedsIPS(ipsLeft, ipsRight,setPID=True):
+    global maxIPS
 
-def setSpeedsIPS(ipsLeft, ipsRight):
-    global ipsLeftCurrent, ipsRightCurrent
-    global pidL,pidR
-    #print("Setting motor speed in IPS, left: {} right: {}".format(ipsLeft,ipsRight))
-    minIPS=-6.8
-    maxIPS=6.8
-    ipsLeft=clamp(ipsLeft,minIPS,maxIPS)
-    ipsRight=clamp(ipsRight,minIPS,maxIPS)
+    global pwmMapL
+    global ipsMapL
 
-    ipsLeftCurrent=ipsLeft
-    ipsRightCurrent=ipsRight
+    global pwmMapR
+    global ipsMapR
 
+    global pidL
+    global pidR
 
-    pidL.SetPoint=ipsLeftCurrent
-    pidR.SetPoint=ipsRightCurrent
+    # print(setPID,ipsLeft,ipsRight)
     # print(pidL.SetPoint)
+    if setPID is True:
+        pidL.SetPoint=ipsLeft
+        pidR.SetPoint=ipsRight
+        # print(pidL.SetPoint)
+
+    if abs(ipsLeft)>maxIPS or abs(ipsRight)>maxIPS:
+        print("Not able to set motor speed to IPS, left: {} right: {}".format(ipsLeft,ipsRight))
+        status=False
+
+    else:
+        print("Setting motor speed in IPS, L: {} R: {}".format(ipsLeft,ipsRight))
+        idxL=closest(ipsMapL, ipsLeft)
+        remL= ipsLeft-ipsMapL[idxL]
+
+        if int(remL) is not 0:
+            interIdxL=int(remL/abs(remL))
+            interL=abs(pwmMapL[idxL]-pwmMapL[idxL+interIdxL])*remL
+        else:
+            interL=0
+
+        pwmL=pwmMapL[idxL]+interL
+        pwmL=round(pwmL,4)
+
+        #Right
+        ipsRight=ipsRight*-1
+        idxR=closest(ipsMapR, ipsRight)
+        remR= ipsRight-ipsMapR[idxR]
+
+        if int(remL) is not 0:
+            interIdxR=int(remR/abs(remR))
+            interR=abs(pwmMapR[idxR]-pwmMapR[idxR+interIdxR])*remR
+        else:
+            interR=0
+
+        pwmR=pwmMapR[idxR]+interR
+        pwmR=round(pwmR,4)
 
 
-    pwmL=remap(ipsLeft,minIPS,maxIPS,1.3,1.7)
-    pwmR=remap(ipsRight,minIPS,maxIPS,1.7,1.3)
-    status=setSpeedsPWM(pwmL,pwmR)
+        setSpeedsPWM(pwmL,pwmR)
+        status=False
     return status
 
 def setSpeedsVW(V, W):
+    global maxIPS
     print("Setting motor speed in VW, V: {} W: {}".format(V,W))
 
     if W == 0:
@@ -178,7 +214,7 @@ def setSpeedsVW(V, W):
             Vl=abs(W)*(R+dmid)#V of outer wheel
             Vr=abs(W)*(R-dmid)#V of innner wheel
 
-    if abs(Vl) <=6.8 and abs(Vr) <=6.8:
+    if abs(Vl) <=maxIPS and abs(Vr) <=maxIPS:
 
         setSpeedsIPS(Vl,Vr)
     else:
@@ -187,90 +223,57 @@ def setSpeedsVW(V, W):
 
 
 
+left_count=0
+right_count=0
+
+window_size=5
+left_window=[]
+right_window=[]
 
 
-countL=0
-countR=0
-
-speedL=0
-speedR=0
+left_start=time.time()
+right_start=time.time()
 
 def onLeftEncode(pin):
-    global ipsLeftCurrent, ipsRightCurrent
-    global pidL
-    global countL
-    global prevEncL
-    global speedL
-    minIPS=-6.8
-    maxIPS=6.8
+    global left_count
+    global left_window
+    global left_start
+    global window_size
 
-    countL=countL+1 #Increment tick count
+    left_count=left_count+1 #Increment tick count
 
-    now=time.time()
-    speedL=2*math.pi*1.3*(1/32)/(now-prevEncL)
-
-    if ipsLeftCurrent<0:
-        speedL=-speedL
-    print(speedL)
-
-    pidL.update(speedL)
-    ipsLeftCurrent=pidL.output+ipsLeftCurrent
+    left_end=time.time()
+    time_elapsed=round(left_end-left_start,4)
+    left_window.append(time_elapsed) #append elapsed time between ticks to window
 
 
-    pwmL=remap(ipsLeftCurrent,minIPS,maxIPS,1.3,1.7)
-    pwmR=remap(ipsRightCurrent,minIPS,maxIPS,1.7,1.3)
+    if len(left_window) == window_size:
 
-    setSpeedsPWM(pwmL,pwmR)
+        left_window.pop(0) #removes oldest entry, required for moving average
 
-
-
-    prevEncL=now
-
-
+    left_start=time.time()
     #print("Left encoder ticked!")
 
 # This function is called when the right encoder detects a rising edge signal.
 def onRightEncode(pin):
-    global ipsLeftCurrent, ipsRightCurrent
-    global pidR
-    global countR
-    global prevEncR
-    global speedR
-    minIPS=-6.8
-    maxIPS=6.8
+    global right_count
+    global right_window
+    global right_start
+    global window_size
 
+    right_count=right_count+1 #Increment tick count
 
-    countR=countR+1 #Increment tick count
+    right_end=time.time()
+    time_elapsed=right_end-right_start
+    right_window.append(time_elapsed) #append elapsed time between ticks to window
 
-    now=time.time()
+    if len(right_window) == window_size:
+        right_window.pop(0) #removes oldest entry, required for moving average
 
-
-
-    speedR=2*math.pi*1.3*(1/32)/(now-prevEncR)
-
-    if ipsRightCurrent<0:
-        speedR=-speedR
-
-    pidR.update(speedR)
-    ipsRightCurrent=pidR.output+ipsRightCurrent
-
-
-
-    pwmL=remap(ipsLeftCurrent,minIPS,maxIPS,1.3,1.7)
-    pwmR=remap(ipsRightCurrent,minIPS,maxIPS,1.7,1.3)
-
-    setSpeedsPWM(pwmL,pwmR)
-
-
-    prevEncR=now
+    right_start=time.time()
+    #print("Right encoder ticked!")
 
 def initEncoders():
-    global prevEncL
-    global prevEncR
-
-    prevEncL=time.time()
-    prevEncR=time.time()
-
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
 
@@ -282,21 +285,35 @@ def initEncoders():
     GPIO.add_event_detect(RENCODER, GPIO.RISING, onRightEncode)
 
 def getCounts():
-    global countL, countR
-    return (countL,countR)
+    global left_count, right_count
+    return (left_count,right_count)
 
 def resetCounts():
-    global countL, countR
-    countL=0
-    countR=0
+    global left_count
+    global right_count
+    left_count=0
+    right_count=0
 
 def getSpeeds():
-    global speedL, speedR
-    retL=speedL
-    retR=speedR
-    # speedL=0
-    # speedR=0
-    return (retL,retR)
+    global left_window
+    global right_window
+    global window_size
+    global pwmLeftCurrent, pwmRightCurrent
+
+    if sum(left_window)==0 or len(left_window)<1:
+        left_speed=0
+    else:
+        left_speed= 2*math.pi*1.3*(max(len(left_window), 1)/32)/float(sum(left_window)) #calculate speed using formula using total_revolutions/total_time
+        if pwmLeftCurrent<1.5:
+            left_speed=-left_speed
+    if sum(right_window)==0 or len(right_window)<1:
+        right_speed=0
+    else:
+        right_speed= 2*math.pi*1.3*(max(len(right_window), 1)/32)/float(sum(right_window)) #calculate speed using formula using total_revolutions/total_time
+        if pwmRightCurrent>1.5:
+            right_speed=-right_speed
+
+    return (round(left_speed,4),round(right_speed,4))
 
 def turnRV(R, V):
     W=V/R
