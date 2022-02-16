@@ -1,3 +1,7 @@
+'''
+    task2.py completes manuever of two circles of radii R1 and R2, respectively. 
+    The completed manuever should outline two circles next to each other.
+'''
 import utils
 import time
 import Adafruit_PCA9685
@@ -9,6 +13,7 @@ import PID
 import threading
 import adafruit_bno055
 
+# Stop the robot by pressing Ctrl + C
 def ctrlC(signum, frame):
     global breakFlag
     breakFlag=True
@@ -20,17 +25,13 @@ def ctrlC(signum, frame):
     GPIO.cleanup()
     exit()
 
-
-
-
+# Loop for PID
 def loopPID(name):
     global breakFlag
     global pidL, pidR
     global setSpeedL, setSpeedR
 
-
     print("PID thread started")
-
 
     #How fast PID updates, when it's too fast PID updates faster than speed measurements can update leading to crazy high overshoot, too slow it takes a while to steady state
     #0.4 is not bad
@@ -62,16 +63,12 @@ def loopPID(name):
                     #print(utils.getSpeeds(),setSpeedL,setSpeedR)
                     utils.setSpeedsIPS(setSpeedL,setSpeedR,False)
 
-
     print("PID thread ended")
 
-
+# Main function for lab3.py
 if __name__ == "__main__":
     global breakFlag
     global pidL, pidR
-
-
-
 
     breakFlag=False
     signal.signal(signal.SIGINT, ctrlC)
@@ -93,11 +90,7 @@ if __name__ == "__main__":
     print("Starting")
     threadPID.start()
 
-
-
-
     #Body code here-start
-
     R1=2
     R2=6
     X=2
@@ -110,8 +103,6 @@ if __name__ == "__main__":
         print("Performing circle maneuver at {} speed in {} seconds".format(X,Y))
         start=time.time()
         resolution=2
-
-
 
         startHeading=utils.getIMUDegrees()
         endHeading=(startHeading+355) % 360
@@ -163,14 +154,7 @@ if __name__ == "__main__":
             if revHalf==True and abs(headingError)<resolution:
                 revCount=revCount+1
 
-
-
-
         print("Finished circle maneuver in {} seconds".format(time.time()-start))
-
-    # time.sleep(300)
-
-
     #Body code here -end
 
     #Cleanup

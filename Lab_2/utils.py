@@ -1,3 +1,7 @@
+'''
+    utils.py contains simple functions utilized to form more
+    complex manuever for robot.
+'''
 import time
 import Adafruit_PCA9685
 import signal
@@ -22,6 +26,18 @@ RENCODER = 18
 
 setSpeedL=0
 setSpeedR=0
+
+wheel_diam=1.3 #Wheel diameter in inches
+
+maxIPS=5
+maxRPS=maxIPS/(2*math.pi*wheel_diam)
+
+
+pwmMapL=[1.448,1.453,1.458,1.463,1.468,1.473,1.478,1.483,1.488,1.493,1.498,1.503,1.508,1.513,1.518,1.523,1.528,1.533,1.538,1.543,1.548,1.553,1.558,1.563]
+ipsMapL=[-4.65,-4.2,-3.75,-3.3,-2.85,-2.4,-1.94,-1.583,-1.123,-0.638,-0.153,0,0,0.1786,0.63,1.123,1.601,2.075,2.45,2.9,3.35,3.8,4.25,4.7]
+
+pwmMapR=[1.443,1.448,1.453,1.458,1.463,1.468,1.473,1.478,1.483,1.488,1.493,1.498,1.503,1.508,1.513,1.518,1.523,1.528,1.533,1.538,1.543,1.548,1.553,1.558,1.563]
+ipsMapR=[-4.65,-4.2,-3.75,-3.3,-2.85,-2.4,-1.94,-1.48,-1.05,-0.613,-0.077,0,0,0.08,0.48,0.89,1.4,1.813,2.25,2.7,3.15,3.6,4.05,4.5,4.95]
 
 global pidL, pidR
 def initPID(P,I,D):
@@ -58,13 +74,15 @@ def remap(value, fromLow, fromHigh, toLow, toHigh):
 def clamp(value, low, high):
     return max(min(high, value), low)
 
-
 def closest(lst, K):
 
      lst = np.asarray(lst)
      idx = (np.abs(lst - K)).argmin()
      return idx
 
+# Function to move robot X inches at given velocity V
+# X - Distance to move in inches
+# V - Velocity to move at in inches/second
 def moveXV(X,V):
     global maxIPS
 
@@ -99,22 +117,14 @@ def moveXV(X,V):
         print("Requested velocity is not able to be set, movement cancelled\n")
         setSpeedsPWM (1.5,1.495)
 
-wheel_diam=1.3 #Wheel diameter in inches
-
-maxIPS=5
-maxRPS=maxIPS/(2*math.pi*wheel_diam)
-
-
-pwmMapL=[1.448,1.453,1.458,1.463,1.468,1.473,1.478,1.483,1.488,1.493,1.498,1.503,1.508,1.513,1.518,1.523,1.528,1.533,1.538,1.543,1.548,1.553,1.558,1.563]
-ipsMapL=[-4.65,-4.2,-3.75,-3.3,-2.85,-2.4,-1.94,-1.583,-1.123,-0.638,-0.153,0,0,0.1786,0.63,1.123,1.601,2.075,2.45,2.9,3.35,3.8,4.25,4.7]
-
-pwmMapR=[1.443,1.448,1.453,1.458,1.463,1.468,1.473,1.478,1.483,1.488,1.493,1.498,1.503,1.508,1.513,1.518,1.523,1.528,1.533,1.538,1.543,1.548,1.553,1.558,1.563]
-ipsMapR=[-4.65,-4.2,-3.75,-3.3,-2.85,-2.4,-1.94,-1.48,-1.05,-0.613,-0.077,0,0,0.08,0.48,0.89,1.4,1.813,2.25,2.7,3.15,3.6,4.05,4.5,4.95]
-
-
+# Set the speeds of the servo motors by giving
+# width of pulse modulation.
+# pwmLeft - pulse width for left motor
+# pwmRight - pulse width for right motor
+# 
+# Note - motors are mounted in opposite directions
 def setSpeedsPWM (pwmLeft, pwmRight):
     global pwmLeftCurrent, pwmRightCurrent
-
 
     Lcal=0
     Rcal=0
@@ -130,12 +140,12 @@ def setSpeedsPWM (pwmLeft, pwmRight):
         pwmLeftCurrent=pwmLeft
         pwmRightCurrent=pwmRight
         #print("Setting motor speed in PWM, left: {} right: {}".format(pwmLeft,pwmRight))
-        pwm.set_pwm(LSERVO, 0, math.floor(pwmLeft / 20 * 4096));
-        pwm.set_pwm(RSERVO, 0, math.floor(pwmRight / 20 * 4096));
+        pwm.set_pwm(LSERVO, 0, math.floor(pwmLeft / 20 * 4096))
+        pwm.set_pwm(RSERVO, 0, math.floor(pwmRight / 20 * 4096))
 
-
-
-
+# Set robot speed in rotation per second of wheels
+# rpsLeft - rotations per second of left wheel
+# rpsRight - rotations per second of right wheel
 def setSpeedsRPS (rpsLeft, rpsRight):
     global maxRPS
     global wheel_diam
@@ -148,7 +158,12 @@ def setSpeedsRPS (rpsLeft, rpsRight):
         setSpeedsIPS(ipsLeft,ipsRight)
 
 
-
+# Function to move robot at a given left and right linear velocity.
+# This function uses the PID and is used by other functions as a 
+# function to utilize PID control.
+# ipsLeft - left wheel linear velocity in inches/second
+# ipsLeft - left wheel linear velocity in inches/second
+# setPID - boolean to choose whether or not PID control is used
 def setSpeedsIPS(ipsLeft, ipsRight,setPID=True):
     global maxIPS
 
@@ -175,8 +190,6 @@ def setSpeedsIPS(ipsLeft, ipsRight,setPID=True):
         pidL.SetPoint=ipsLeft
         pidR.SetPoint=ipsRight
         # print(pidL.SetPoint)
-
-
 
     if abs(ipsLeft)>maxIPS or abs(ipsRight)>maxIPS:
         print("Not able to set motor speed to IPS, left: {} right: {}".format(ipsLeft,ipsRight))
@@ -210,11 +223,12 @@ def setSpeedsIPS(ipsLeft, ipsRight,setPID=True):
         pwmR=pwmMapR[idxR]+interR
         pwmR=round(pwmR,4)
 
-
         #print(pwmL,pwmR)
         setSpeedsPWM(pwmL,pwmR)
 
-
+# Function to set robot to move at given linear and angular velocity
+# V - velocity in inches per second
+# W - angular velocity in radians per second
 def setSpeedsVW(V, W):
     global maxIPS
     #print("Setting motor speed in VW, V: {} W: {}".format(V,W))
@@ -240,8 +254,9 @@ def setSpeedsVW(V, W):
         print("Motors are not capable of completing maneuver, outer {} inner {}".format(Vl,Vr))
 
 
-
-
+'''
+    Encoder functions
+'''
 left_count=0
 right_count=0
 
@@ -357,6 +372,8 @@ last_val = 0xFFFF
 '''
 	IMU functions
 '''
+
+# Function to return current temperature from IMU sensor
 def temperature():
 	global last_val
 	result = sensor.temperature
@@ -367,21 +384,20 @@ def temperature():
 		last_val = result
 	return result
 
-# Function to turn robot 90 degrees using IMU euler angle
-# Function should stop turning robot after turing 90 degrees clockwise
+# Function to turn robot angle degrees using IMU euler angle
+# Function should stop turning robot after turing angle degrees clockwise
+# angle - angle in degrees of desired robot rotation
 #
-# Note - However there is a small amount of inconsistency
+# Note - There is a small amount of inconsistency
 #        due to not being able to call euler position frequently
-#        enough without erroneous response
+#        enough without erroneous response.
 def rotateA(angle):
     global pidL,pidR
 
     setSpeedsIPS(0,0)
 
-
     pidL.enable=False
     pidR.enable=False
-
 
     speed=1
 
@@ -392,6 +408,7 @@ def rotateA(angle):
 
     angleError= (angleCurrent - angleGoal + 540)%360 - 180
 
+    # Loop will repeat until less than angle of resolution
     while abs(angleError)>angleResolution:
 
         if angleError>0: #if error is positive turn left
@@ -418,6 +435,8 @@ def rotateA(angle):
     pidL.enable=True
     pidR.enable=True
 
+# Function to return the current x Euler angle from 
+# BNO055 IMU, range of values = [0,360].
 lastIMU=0
 def getIMUDegrees():
     global lastIMU
