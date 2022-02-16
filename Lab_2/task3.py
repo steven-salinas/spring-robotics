@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     #Body code here-start
 
-    R1=2
+    R1=6
     D1=6
     X=2
     Y=300
@@ -107,68 +107,55 @@ if __name__ == "__main__":
     distance=distance+(2*D1)
 
     if X<(distance/Y):
-        print("Can not perform circle maneuver at {} speed in {} seconds".format(X,Y))
+        print("Can not perform waypoint maneuver at {} speed in {} seconds".format(X,Y))
     else:
-        print("Performing circle maneuver at {} speed in {} seconds".format(X,Y))
+        print("Performing waypoint maneuver at {} speed in {} seconds".format(X,Y))
         start=time.time()
         resolution=2
 
+        #Doing quarter of first circle
+        angle=utils.getIMUDegrees()
+        startHeading=angle
+        endHeading=(startHeading+90) % 360
+        headingError= (angle - endHeading + 540)%360 - 180
 
-
-        startHeading=utils.getIMUDegrees()
-        endHeading=(startHeading+355) % 360
         utils.turnRV(R1,X)
-        revCount=0
-        revHalf=False
-        while revCount<1:
+        while abs(headingError)>resolution:
             angle=utils.getIMUDegrees()
-
-            posX=R1*math.cos(math.radians(angle)) #find posX in reference to center of circle R1
-            posX=utils.remap(posX,-R1,R1,-2*R1,0)
-
-             #adjust reference
-
-            posY=R1*math.sin(math.radians(angle))
-
-            position=(round(posX,3),round(posY,3))
-            print("IMU: {} \t Pos:{}".format(round(angle,3),position))
             headingError= (angle - endHeading + 540)%360 - 180
 
-            if abs(headingError)>90:
-                revHalf=True
-            if revHalf==True and abs(headingError)<resolution:
-                revCount=revCount+1
+        #Going straight
+        utils.moveXV(D1,X)
 
+        #Doing half of second circle
+        angle=utils.getIMUDegrees()
+        startHeading=angle
+        endHeading=(startHeading+180) % 360
+        headingError= (angle - endHeading + 540)%360 - 180
 
-        startHeading=utils.getIMUDegrees()
-        endHeading=(startHeading+355) % 360
-        utils.turnRV(R2,-X)
-        revCount=0
-        revHalf=False
-        while revCount<1:
-
+        utils.turnRV(R1,X)
+        while abs(headingError)>resolution:
             angle=utils.getIMUDegrees()
-
-            posX=R2*math.cos(math.radians(angle)) #find posX in reference to center of circle R1
-            posX=utils.remap(posX,-R2,R2,2*R2,0)
-
-             #adjust reference
-
-            posY=-R2*math.sin(math.radians(angle))
-
-            position=(round(posX,3),round(posY,3))
-            print("IMU: {} \t Pos:{}".format(round(angle,3),position))
             headingError= (angle - endHeading + 540)%360 - 180
 
-            if abs(headingError)>90:
-                revHalf=True
-            if revHalf==True and abs(headingError)<resolution:
-                revCount=revCount+1
+
+        #Going straight
+        utils.moveXV(D1,X)
+
+        #Doing quarter of first circle
+        angle=utils.getIMUDegrees()
+        startHeading=angle
+        endHeading=(startHeading+90) % 360
+        headingError= (angle - endHeading + 540)%360 - 180
+
+        utils.turnRV(R1,X)
+        while abs(headingError)>resolution:
+            angle=utils.getIMUDegrees()
+            headingError= (angle - endHeading + 540)%360 - 180
 
 
 
-
-        print("Finished circle maneuver in {} seconds".format(time.time()-start))
+        print("Finished waypoint maneuver in {} seconds".format(time.time()-start))
 
     # time.sleep(300)
 
