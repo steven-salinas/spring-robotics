@@ -418,8 +418,18 @@ def rotateA(angle):
     pidL.enable=True
     pidR.enable=True
 
+lastIMU=0
 def getIMUDegrees():
-    return sensor[0]
+    global lastIMU
+
+    val=sensor.euler[0]
+    if val== None or val>360 or val<0:
+        deg=lastIMU
+    else:
+        deg=val
+        lastIMU=val
+
+    return deg
 
     #
     # while abs(angleError)>angleResolution:

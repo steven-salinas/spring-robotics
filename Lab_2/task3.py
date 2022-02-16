@@ -99,11 +99,13 @@ if __name__ == "__main__":
     #Body code here-start
 
     R1=2
-    R2=6
+    D1=6
     X=2
     Y=300
 
-    distance=2*math.pi*(R1+R2)
+    distance=2*math.pi*(R1)
+    distance=distance+(2*D1)
+
     if X<(distance/Y):
         print("Can not perform circle maneuver at {} speed in {} seconds".format(X,Y))
     else:
