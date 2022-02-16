@@ -9,6 +9,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 import PID
 import threading
+import board
+import adafruit_bno055
 
 # The servo hat uses its own numbering scheme within the Adafruit library.
 # 0 represents the first servo, 1 for the second, and so on.
@@ -18,16 +20,23 @@ RSERVO = 0
 LENCODER = 17
 RENCODER = 18
 
-
+setSpeedL=0
+setSpeedR=0
 
 global pidL, pidR
 def initPID(P,I,D):
     global pidL, pidR
+
     pidL = PID.PID(P,I,D)
     pidR = PID.PID(P,I,D)
     pidL.SetPoint=0
     pidR.SetPoint=0
     # return pidL, pidR
+
+def initIMU():
+    i2c = board.I2C()
+    sensor = adafruit_bno055.BNO055_I2C(i2c)
+    return sensor
 
 def initMotors():
     global pwm
@@ -57,6 +66,8 @@ def closest(lst, K):
      return idx
 
 def moveXV(X,V):
+    global maxIPS
+
     travel_time=abs(X/V)
     print("Moving a distance of {} inches at {} linear inches per second for {} seconds".format(X,V,travel_time))
 
@@ -64,8 +75,10 @@ def moveXV(X,V):
 
     second_timer=time.time()+1
     start_time=time.time()
-    status=setSpeedsIPS(V, V)
-    if status:
+    resetCounts()
+
+    if abs(V)<maxIPS :
+        setSpeedsIPS(V,V)
         # while time.time()<end_time:
         ticks_elapsed=(getCounts()[1]+getCounts()[0])/2
         while ticks_elapsed <num_ticks:
@@ -75,9 +88,7 @@ def moveXV(X,V):
                 time_elapsed=round(time.time()-start_time,3)
                 distance_elapsed=round(ticks_elapsed*0.255254,3)
                 print("{} seconds pased, moved {} inches".format(time_elapsed,distance_elapsed))
-                x=getSpeeds()
-                print(round(x[0]*2*math.pi*1.3,2))
-                print(round(x[1]*2*math.pi*1.3,2))
+
 
             ticks_elapsed=(getCounts()[1]+getCounts()[0])/2
 
@@ -114,15 +125,14 @@ def setSpeedsPWM (pwmLeft, pwmRight):
     # maxPWM=1.7
     # pwmLeft=clamp(pwmLeft,minPWM,maxPWM)
     # pwmRight=clamp(pwmRight,minPWM,maxPWM)
-        status=False
+
     else:
         pwmLeftCurrent=pwmLeft
         pwmRightCurrent=pwmRight
         #print("Setting motor speed in PWM, left: {} right: {}".format(pwmLeft,pwmRight))
         pwm.set_pwm(LSERVO, 0, math.floor(pwmLeft / 20 * 4096));
         pwm.set_pwm(RSERVO, 0, math.floor(pwmRight / 20 * 4096));
-        status=True
-    return status
+
 
 
 
@@ -132,12 +142,11 @@ def setSpeedsRPS (rpsLeft, rpsRight):
 
     if abs(rpsLeft)>maxRPS or abs(rpsRight)>maxRPS:
         print("Not able to set motor speed to RPS, left: {} right: {}".format(rpsLeft,rpsRight))
-        status=False
     else:
         ipsLeft=(2*math.pi*wheel_diam)*rpsLeft
         ipsRight=(2*math.pi*wheel_diam)*rpsRight
         setSpeedsIPS(ipsLeft,ipsRight)
-    return status
+
 
 
 def setSpeedsIPS(ipsLeft, ipsRight,setPID=True):
@@ -152,19 +161,29 @@ def setSpeedsIPS(ipsLeft, ipsRight,setPID=True):
     global pidL
     global pidR
 
+    global setSpeedL, setSpeedR
+
     # print(setPID,ipsLeft,ipsRight)
     # print(pidL.SetPoint)
+
+    pidL.clear()
+    pidR.clear()
+    setSpeedL=ipsLeft
+    setSpeedR=ipsRight
+
     if setPID is True:
         pidL.SetPoint=ipsLeft
         pidR.SetPoint=ipsRight
         # print(pidL.SetPoint)
+
+
 
     if abs(ipsLeft)>maxIPS or abs(ipsRight)>maxIPS:
         print("Not able to set motor speed to IPS, left: {} right: {}".format(ipsLeft,ipsRight))
         status=False
 
     else:
-        print("Setting motor speed in IPS, L: {} R: {}".format(ipsLeft,ipsRight))
+        #print("Setting motor speed in IPS, L: {} R: {}".format(ipsLeft,ipsRight))
         idxL=closest(ipsMapL, ipsLeft)
         remL= ipsLeft-ipsMapL[idxL]
 
@@ -192,13 +211,13 @@ def setSpeedsIPS(ipsLeft, ipsRight,setPID=True):
         pwmR=round(pwmR,4)
 
 
+        #print(pwmL,pwmR)
         setSpeedsPWM(pwmL,pwmR)
-        status=False
-    return status
+
 
 def setSpeedsVW(V, W):
     global maxIPS
-    print("Setting motor speed in VW, V: {} W: {}".format(V,W))
+    #print("Setting motor speed in VW, V: {} W: {}".format(V,W))
 
     if W == 0:
         Vl=V
@@ -208,11 +227,11 @@ def setSpeedsVW(V, W):
 
         dmid=2 #half of wheel axis distance in inches
         if W>0:
-            Vl=abs(W)*(R-dmid)#V of outer wheel
-            Vr=abs(W)*(R+dmid)#V of innner wheel
-        else:
             Vl=abs(W)*(R+dmid)#V of outer wheel
             Vr=abs(W)*(R-dmid)#V of innner wheel
+        else:
+            Vl=abs(W)*(R-dmid)#V of outer wheel
+            Vr=abs(W)*(R+dmid)#V of innner wheel
 
     if abs(Vl) <=maxIPS and abs(Vr) <=maxIPS:
 
@@ -315,6 +334,102 @@ def getSpeeds():
 
     return (round(left_speed,4),round(right_speed,4))
 
+def resetSpeeds():
+    global left_window, right_window
+
+    left_window=[]
+    right_window=[]
 def turnRV(R, V):
     W=V/R
     setSpeedsVW(V,W)
+
+
+
+'''
+	Setting up IMU sensor settings
+'''
+
+i2c = board.I2C()
+sensor = adafruit_bno055.BNO055_I2C(i2c)
+
+last_val = 0xFFFF
+
+'''
+	IMU functions
+'''
+def temperature():
+	global last_val
+	result = sensor.temperature
+	if abs(result - last_val) == 128:
+		result = sensor.temperature
+		if abs(result - last_val) == 128:
+			return 0b00111111 & result
+		last_val = result
+	return result
+
+# Function to turn robot 90 degrees using IMU euler angle
+# Function should stop turning robot after turing 90 degrees clockwise
+#
+# Note - However there is a small amount of inconsistency
+#        due to not being able to call euler position frequently
+#        enough without erroneous response
+def rotateA(angle):
+    global pidL,pidR
+
+    setSpeedsIPS(0,0)
+
+
+    pidL.enable=False
+    pidR.enable=False
+
+
+    speed=1
+
+    angleResolution=1
+
+    angleCurrent = sensor.euler[0]
+    angleGoal=(angleCurrent+angle)%360
+
+    angleError= (angleCurrent - angleGoal + 540)%360 - 180
+
+    while abs(angleError)>angleResolution:
+
+        if angleError>0: #if error is positive turn left
+
+            setSpeedsIPS(-speed,speed,False)
+
+        else: #if negative turn right
+            setSpeedsIPS(speed,-speed,False)
+
+        angleCurrent = sensor.euler[0] if sensor.euler[0] is not None else angleCurrent
+        angleError= (angleCurrent - angleGoal + 540)%360 - 180
+        # time.sleep(.1)
+
+            # angleErrorWindow.append(abs(angleError)) #append elapsed time between ticks to window
+            # angleErrorWindow.pop(0) #removes oldest entry, required for moving average
+            # angleErrorAvg=sum(angleErrorWindow)/len(angleErrorWindow)
+            # print(int(angleErrorAvg))
+
+    setSpeedsIPS(0,0)
+
+    angleCurrent = sensor.euler[0] if sensor.euler[0] is not None else angleCurrent
+    angleError= (angleCurrent - angleGoal + 540)%360 - 180
+    print("Finished rotating {} deg with {} deg of error".format(angle,angleError))
+    pidL.enable=True
+    pidR.enable=True
+
+def getIMUDegrees():
+    return sensor[0]
+
+    #
+    # while abs(angleError)>angleResolution:
+    #
+    #
+    #     if angleError>0: #if error is positive turn left
+    #         setSpeedsIPS(-speed/4,speed/4)
+    #     else: #if negative turn right
+    #         setSpeedsIPS(speed/4,-speed/4)
+    #
+    #
+    #     angleCurrent = sensor.euler[0] if sensor.euler[0] is not None else angleCurrent
+    #     angleError= (angleCurrent - angleGoal + 540)%360 - 180

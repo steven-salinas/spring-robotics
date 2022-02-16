@@ -15,18 +15,32 @@ class PID:
         self.output = 0.0
 
         self.sample_time = 0.00
-        self.current_time = current_time if current_time is not None else time.time()
+        self.current_time = time.time()
         self.last_time = self.current_time
 
+        self.enable=True
 
 
 
-    def update(self, feedback_value, current_time=None):
+
+    def clear(self):
+        self.PTerm = 0.0
+        self.ITerm = 0.0
+        self.DTerm = 0.0
+        self.last_error = 0.0
+        self.output = 0.0
+
+        self.sample_time = 0.00
+        self.current_time = time.time()
+        self.last_time = self.current_time
+
+    def update(self, feedback_value):
+
 
         #self.SetPoint=abs(self.SetPoint)
         error = self.SetPoint - feedback_value
         # print(self.SetPoint,feedback_value)
-        self.current_time = current_time if current_time is not None else time.time()
+        self.current_time = time.time()
         delta_time = self.current_time - self.last_time
         delta_error = error - self.last_error
 

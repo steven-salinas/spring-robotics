@@ -4,12 +4,10 @@ import Adafruit_PCA9685
 import signal
 import math
 import RPi.GPIO as GPIO # README: https://pypi.org/project/RPi.GPIO/
-from itertools import cycle
-from decimal import Decimal
-from matplotlib import pyplot as plt
 import numpy as np
 import PID
 import threading
+import adafruit_bno055
 
 def ctrlC(signum, frame):
     global breakFlag
@@ -18,7 +16,7 @@ def ctrlC(signum, frame):
 
     threadPID.join()
     print("Exiting")
-    utils.setSpeedsPWM(1.5,1.5)
+    utils.setSpeedsPWM (1.5,1.495)
     GPIO.cleanup()
     exit()
 
@@ -27,10 +25,10 @@ def ctrlC(signum, frame):
 
 def loopPID(name):
     global breakFlag
-    global enablePID
     global pidL, pidR
-
     global setSpeedL, setSpeedR
+
+
     print("PID thread started")
 
 
@@ -42,33 +40,37 @@ def loopPID(name):
     setSpeedL=0
     setSpeedR=0
 
-    if enablePID:
+    if True:
         while breakFlag is not True:
 
             time.sleep(updateRate)
 
-            speedL, speedR=utils.getSpeeds()
+            if pidL.SetPoint==0 and pidR.SetPoint==0:
+                utils.setSpeedsPWM (1.5,1.495)
 
-            pidL.update(speedL)
-            pidR.update(speedR)
 
-            # print(speedL,speedR)
+            else:
+                speedL, speedR=utils.getSpeeds()
+                if pidL.enable==True and pidR.enable==True:
+                    pidL.update(speedL)
+                    setSpeedL=pidL.output+utils.setSpeedL
 
-            # print(pidL.output,'\t',pidR.output)
-            setSpeedL=pidL.output+setSpeedL
-            setSpeedR=pidR.output+setSpeedR
-            #print(speed,y,current_speedR,pidR.output)
-            utils.setSpeedsIPS(setSpeedL,setSpeedR,False)
+                    pidR.update(speedR)
+                    setSpeedR=pidR.output+utils.setSpeedR
+
+                    #print(pidL.output,pidR.output)
+                    #print(utils.getSpeeds(),setSpeedL,setSpeedR)
+                    utils.setSpeedsIPS(setSpeedL,setSpeedR,False)
+
 
     print("PID thread ended")
 
 
 if __name__ == "__main__":
-    global enablePID
     global breakFlag
     global pidL, pidR
 
-    enablePID=True
+
 
 
     breakFlag=False
@@ -77,7 +79,8 @@ if __name__ == "__main__":
     #initialize motors/encoders, PID is initialized with values inputted
     utils.initEncoders()
     utils.initMotors()
-    utils.initPID(0.12,0.03,0.01)
+    utils.initPID(0.6,0.1,0.00)
+    utils.setSpeedsPWM (1.5,1.495)
     imu=utils.initIMU()
 
     #Grab initialized pid objects
@@ -91,11 +94,44 @@ if __name__ == "__main__":
     threadPID.start()
 
 
+
+
     #Body code here-start
 
+    H=25
+    W=25
+    V=3
+    Y=42
 
-    while breakFlag is not True:
-        print(imu.euler)
+    distance=2*(H+W)
+    distance=distance+(8*math.pi)
+    if V<(distance/Y):
+        print("Can not perform rectangle maneuver at {} speed in {} seconds".format(V,Y))
+    else:
+        print("Performing rectangle maneuver at {} speed in {} seconds".format(V,Y))
+        start=time.time()
+
+        utils.moveXV(H/2,V)
+        utils.rotateA(90)
+
+
+        utils.moveXV(W,V)
+        utils.rotateA(90)
+
+
+        utils.moveXV(H,V)
+        utils.rotateA(90)
+
+
+        utils.moveXV(W,V)
+        utils.rotateA(90)
+
+
+        utils.moveXV(H/2,V)
+
+        print("Finished rectangle maneuver in {} seconds".format(time.time()-start))
+
+    # time.sleep(300)
 
 
     #Body code here -end
@@ -104,6 +140,6 @@ if __name__ == "__main__":
     breakFlag=True
     threadPID.join()
     print("Exiting")
-    utils.setSpeedsPWM(1.5,1.5)
+    utils.setSpeedsPWM (1.5,1.495)
     GPIO.cleanup()
     exit()
