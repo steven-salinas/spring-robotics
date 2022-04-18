@@ -1,4 +1,26 @@
+import copy
+
+
 directions = ['W', 'N', 'E', 'S']
+cell_to_index = {1:(0,0),2:(0,1),3:(0,2),4:(0,3),
+                5:(1,0),6:(1,1),7:(1,2),8:(1,3),
+                9:(2,0),10:(2,1),11:(2,2),12:(2,3),
+                13:(3,0),14:(3,1),15:(3,2),16:(3,3)}
+#print(cell_to_index[1])
+
+index_to_cell = {(0,0):1,(0,1):2,(0,2):3,(0,3):4,
+                (1,0):5,(1,1):6,(1,2):7,(1,3):8,
+                (2,0):9,(2,1):10,(2,2):11,(2,3):12,
+                (3,0):13,(3,1):14,(3,2):15,(3,3):16}
+#print(index_to_cell[0,1])
+surrounded_squares = {1:['W']}
+adjacent_squares = {1:['N','S'],4:['N','E'],5:['N','W'],6:['N','E'],10:['W','S'],11:['E','S']
+                ,13:['W','S'],16:['E','S']}
+opposite_squares = {1:['E'],2:['E','W'],7:['N','S'],8:['N','S'],9:['N','S'],12:['N','S']
+                ,14:['E','W'],15:['E','W']}
+single_square = {2:['N','S'],3:['N'],4:['W'],5:['S'],6:['S'],7:['E','W'],8:['E','W']
+                ,9:['E','W'],10:['E'],11:['W'],12:['E','W']
+                ,13:['E'],14:['N','S'],15:['N','S'],16:['W']}
 
 # Motion Model
 prob_forward = 0.7
@@ -12,8 +34,44 @@ SQ_SIZE = 18
 ROWS = 4
 COLUMNS = 4
 
-def model_update(input_arr, direction):
-    arr = input_arr
+def sensor_update(left:int,front:int,right:int,input_arr:list[list[int]],dir:str) -> list[list[int]]:
+    reading = [left,front,right]
+    selection = None
+    if reading == [1,1,1]:
+        selection = surrounded_squares
+    elif reading == [1,1,0] or reading == [0,1,1]:
+        selection = adjacent_squares
+    elif reading == [1,0,1]:
+        selection = opposite_squares
+    elif reading == [1,0,0] or reading == [0,1,0] or reading == [0,0,1]:
+        selection = single_square
+    else:
+        selection = None
+
+    belief_arr =  [[0.00]*COLUMNS]*ROWS
+    cell_prob = 1/len(selection.keys())
+    for key in selection.keys():
+        #print(cell_to_index[key])
+        i,j = cell_to_index[key]
+        belief_arr[i][j] = cell_prob * input_arr[i][j]
+        #print(input_arr[i][j])
+        print(belief_arr[i][j])
+    '''for i in range(len(belief_arr)):
+        for j in range(len(belief_arr[0])):
+            if index_to_cell[i,j] in selection.keys():
+                #print(index_to_cell[i,j])
+                #print(belief_arr[i][j])
+                belief_arr[i][j] = cell_prob * input_arr[i][j]
+            else:
+                belief_arr[i][j] = 0.0'''
+    '''for key in selection.keys():
+        current_idx = cell_to_index[key]
+        (i,j) = current_idx[0],current_idx[1]
+        print(belief_arr[3])
+        belief_arr[i][j] = cell_prob * input_arr[i][j]'''
+    return belief_arr
+
+def motion_update(arr:list[list[int]], direction:str):
     for row in range(len(arr)):
         for col in range(len(arr[0])):
             # Going West
@@ -68,40 +126,43 @@ def main():
                     9:(-1.5*SQ_SIZE,-0.5*SQ_SIZE), 10:(-0.5*SQ_SIZE,-0.5*SQ_SIZE), 11:(0.5*SQ_SIZE,-0.5*SQ_SIZE), 12:(1.5*SQ_SIZE,-0.5*SQ_SIZE),
                     13:(-1.5*SQ_SIZE,-1.5*SQ_SIZE), 14:(-0.5*SQ_SIZE,-1.5*SQ_SIZE), 15:(0.5*SQ_SIZE,-1.5*SQ_SIZE), 16:(1.5*SQ_SIZE,-1.5*SQ_SIZE)}
 
-    # Map of walls based on cell number
+    # Map of walls based on cell number and facing north
     grid_map = {1:'WWOW', 2:'OWOW', 3:'OWOO', 4:'OWWO',
                 5:'WWOO', 6:'OWWO', 7:'WOWO', 8:'WOWO',
                 9:'WOWO', 10:'WOOW', 11:'OOWW', 12:'WOWO',
                 13:'WOOW', 14:'OWOW', 15:'OWOW', 16:'OOWW'}
 
-    surrounded_squares = [1]
-    adjacent_squares = [4,5,6,10,11,13,16]
-    opposite_squares = [2,7,8,9,12,14,15]
-    single_square = [3]
+    arr = [[0]*COLUMNS]*ROWS
 
-    rows,cols = (4,4)
-    arr = [[0]*cols]*rows
-
-    NUM_SQ = rows * cols
+    NUM_SQ = ROWS * COLUMNS
     starting_probability = 1/NUM_SQ
-    starting_direction = directions[1]
+    starting_direction = directions[1] # North
     #print(starting_possibility)
     #print(cell_num.keys())
     for i in range(len(arr)):
-        for j in range(len(arr)):
+        for j in range(len(arr[0])):
             #print((i,j),cell_num.get((i,j)))
             #temp_cell_num = cell_num.get((i,j))
             #print(grid_map.get(temp_cell_num))
             arr[i][j]=starting_probability
 
-    arr_updated = model_update(arr,starting_direction)
+    motion_updated_arr = motion_update(copy.deepcopy(arr),starting_direction)
 
-    for row in range(len(arr_updated)):
+    for row in range(len(motion_updated_arr)):
         #print(arr[row])
-        print(arr_updated[row])
+        #print(motion_updated_arr[row])
         '''for column in range(len(arr[0])):
             #print(arr[row][column])
             pass'''
 
+    belief_bar_arr = [[0]*COLUMNS]*ROWS
+    for i in range(len(belief_bar_arr)):
+        for j in range(len(belief_bar_arr)):
+            belief_bar_arr[i][j] = arr[i][j] * motion_updated_arr[i][j]
+        #print(belief_bar_arr[i])
+
+    belief_arr = sensor_update(1,0,1,belief_bar_arr,starting_direction)
+    for row in belief_arr:
+        print(row)
 if __name__ == '__main__':
     main()
