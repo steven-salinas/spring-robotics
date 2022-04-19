@@ -1,5 +1,29 @@
 import copy
+import utils
+import time
 
+import signal
+import math
+import RPi.GPIO as GPIO # README: https://pypi.org/project/RPi.GPIO/
+
+import PID
+import threading
+
+
+def ctrlC(signum, frame):
+    global breakFlag
+    breakFlag=True
+    print("Ctrl-C caught")
+
+    # threadPID.join()
+    print("Exiting")
+
+    lSensor.stop_ranging()
+    fSensor.stop_ranging()
+    rSensor.stop_ranging()
+    utils.setSpeedsPWM (1.508,1.5)
+    GPIO.cleanup()
+    exit()
 
 directions = ['W', 'N', 'E', 'S']
 cell_to_index = {1:(0,0),2:(0,1),3:(0,2),4:(0,3),
@@ -48,27 +72,25 @@ def sensor_update(left:int,front:int,right:int,input_arr:list[list[int]],dir:str
     else:
         selection = None
 
-    belief_arr =  [[0.00]*COLUMNS]*ROWS
+    belief_arr = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
     cell_prob = 1/len(selection.keys())
-    for key in selection.keys():
-        #print(cell_to_index[key])
+    for key in selection.keys():        
         i,j = cell_to_index[key]
-        belief_arr[i][j] = cell_prob * input_arr[i][j]
-        #print(input_arr[i][j])
-        print(belief_arr[i][j])
-    '''for i in range(len(belief_arr)):
-        for j in range(len(belief_arr[0])):
-            if index_to_cell[i,j] in selection.keys():
-                #print(index_to_cell[i,j])
-                #print(belief_arr[i][j])
-                belief_arr[i][j] = cell_prob * input_arr[i][j]
-            else:
-                belief_arr[i][j] = 0.0'''
-    '''for key in selection.keys():
-        current_idx = cell_to_index[key]
-        (i,j) = current_idx[0],current_idx[1]
-        print(belief_arr[3])
-        belief_arr[i][j] = cell_prob * input_arr[i][j]'''
+        if dir in selection[key]:
+            belief_arr[i][j] = cell_prob * input_arr[i][j]
+
+    arr_sum = 0
+    for row in belief_arr:
+        arr_sum += sum(row)
+    
+    # Normalize
+    for row in range(len(belief_arr)):
+        for column in range(len(belief_arr[0])):
+            if belief_arr[row][column] != 0:
+                belief_arr[row][column] = belief_arr[row][column] / arr_sum
+    
+    for row in belief_arr:
+        print(row)
     return belief_arr
 
 def motion_update(arr:list[list[int]], direction:str):
@@ -132,7 +154,7 @@ def main():
                 9:'WOWO', 10:'WOOW', 11:'OOWW', 12:'WOWO',
                 13:'WOOW', 14:'OWOW', 15:'OWOW', 16:'OOWW'}
 
-    arr = [[0]*COLUMNS]*ROWS
+    arr = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
 
     NUM_SQ = ROWS * COLUMNS
     starting_probability = 1/NUM_SQ
@@ -161,8 +183,11 @@ def main():
             belief_bar_arr[i][j] = arr[i][j] * motion_updated_arr[i][j]
         #print(belief_bar_arr[i])
 
-    belief_arr = sensor_update(1,0,1,belief_bar_arr,starting_direction)
-    for row in belief_arr:
-        print(row)
+    belief_arr = sensor_update(1,1,0,belief_bar_arr,starting_direction)
+    '''for row in belief_arr:
+        print(row)'''
+    
+    '''basic wall following using lab 3 task 4 code, then use encoders to measure each 18 inches, robot should stop when it
+    it reaches a certain amount of ticks, use right wheel ticks as they are more constant'''
 if __name__ == '__main__':
     main()
