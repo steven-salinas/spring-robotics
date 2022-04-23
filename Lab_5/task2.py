@@ -1,4 +1,5 @@
 import copy
+from lib2to3.pgen2.token import PERCENT
 import time
 
 '''
@@ -73,8 +74,9 @@ CURRENT_DIRECTION = 1
 SQ_SIZE = 18
 
 # Number of beginning particles
+PARTICLE_PERCENT = 0.8
 PARTICLE_NUM = 112
-PARTICLE_THRESHOLD = 0.9 * PARTICLE_NUM
+PARTICLE_THRESHOLD = PARTICLE_PERCENT * PARTICLE_NUM
 
 ROWS = 4
 COLUMNS = 4
@@ -146,59 +148,110 @@ def sensor_update(readings,input_arr:list[list[int]]) -> list[list[int]]:
         for col in range(len(arr[0])):
             arr[row][col] = arr[row][col] / arr_sum
 
+    current_particles = 0
+    global PARTICLE_NUM
     # Resampling
     for row in range(len(arr)):
         for col in range(len(arr[0])):
             arr[row][col] = round(arr[row][col] * PARTICLE_NUM)
+            current_particles += arr[row][col]
+    
+    if current_particles != PARTICLE_NUM:
+        PARTICLE_NUM = current_particles
+        PARTICLE_THRESHOLD = PARTICLE_PERCENT * PARTICLE_NUM
 
+    print("\nAfter Sensor update and resampling")
     for row in arr:
         print(row)
 
     return arr
 
-def motion_update(arr:list[list[int]], direction:str):
-    for row in range(len(arr)):
-        for col in range(len(arr[0])):
+def motion_update(input_arr):
+    global PARTICLE_NUM
+    global PARTICLE_THRESHOLD
+    arr = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+    row = 0
+    while row < 4:
+        for col in range(len(input_arr[0])):
+            #Skip if cell has no particles already
+            if input_arr[row][col] == 0:
+                continue
+
+            cell = index_to_cell[row,col]
+            prob_accumulated = prob_stay
+            map_left = grid_map[cell][(CURRENT_DIRECTION-1)%4]
+            map_front = grid_map[cell][CURRENT_DIRECTION]
+            map_right = grid_map[cell][(CURRENT_DIRECTION+1)%4]
+            
+            if map_left == 'W':
+                prob_accumulated += prob_left
+            if map_front == 'W':
+                prob_accumulated += prob_forward
+            if map_right == 'W':
+                prob_accumulated += prob_right
+                
+
+            # Adding particles for current cell
+            arr[row][col] += round(input_arr[row][col] * prob_accumulated)
+
+            ''' Will only work if outside of map is also walls
+                As that the all check also works as an array bounds check'''
+
             # Going West
-            if direction == 'W':
-                if col - 1 >= 0:
-                    arr[row][col-1] += arr[row][col-1] * prob_forward
-                if row + 1 < ROWS:
-                    arr[row+1][col] += arr[row+1][col] * prob_left
-                if row - 1 >= 0:
-                    arr[row-1][col] += arr[row-1][col] * prob_right
-                arr[row][col] += arr[row][col] * prob_stay
+            if CURRENT_DIRECTION == 0:
+                if map_front != 'W':
+                    arr[row][col-1] += round(input_arr[row][col] * prob_forward)
+                if map_left != 'W':
+                    arr[row+1][col] += round(input_arr[row][col] * prob_left)
+                if map_right != 'W':
+                    arr[row-1][col] += round(input_arr[row][col] * prob_right)
+            
             # Going North
-            elif direction == 'N':
-                if row - 1 >= 0:
-                    arr[row-1][col] += arr[row-1][col] * prob_forward
-                if col - 1 >= 0:
-                    arr[row][col-1] += arr[row][col-1] * prob_left
-                if col + 1 < COLUMNS:
-                    arr[row][col + 1] += arr[row][col +1] * prob_right
-                arr[row][col] += arr[row][col] * prob_stay
+            if CURRENT_DIRECTION == 1:
+                if map_front != 'W':
+                    arr[row-1][col] += round(input_arr[row][col] * prob_forward)
+                if map_left != 'W':
+                    arr[row][col-1] += round(input_arr[row][col] * prob_left)
+                if map_right != 'W':
+                    arr[row][col+1] += round(input_arr[row][col] * prob_right)
+
             # Going East
-            elif direction == 'E':
-                if col + 1 < COLUMNS:
-                    arr[row][col+1] += arr[row][col+1] * prob_forward
-                if row + 1 < ROWS:
-                    arr[row+1][col] += arr[row+1][col] * prob_right
-                if row - 1 >= 0:
-                    arr[row-1][col] += arr[row-1][col] * prob_left
-                arr[row][col] += arr[row][col] * prob_stay
+            if CURRENT_DIRECTION == 2:
+                if map_front != 'W':
+                    arr[row][col+1] += round(input_arr[row][col] * prob_forward)
+                if map_left != 'W':
+                    arr[row-1][col] += round(input_arr[row][col] * prob_left)
+                if map_right != 'W':
+                    arr[row+1][col] += round(input_arr[row][col] * prob_right)
+            
             # Going South
-            elif direction == 'S':
-                if row + 1 < ROWS:
-                    arr[row+1][col] += arr[row+1][col] * prob_forward
-                if col - 1 >= 0:
-                    arr[row][col-1] += arr[row][col-1] * prob_right
-                if col + 1 < COLUMNS:
-                    arr[row][col + 1] += arr[row][col +1] * prob_left
-                arr[row][col] += arr[row][col] * prob_stay
+            if CURRENT_DIRECTION == 3:
+                if map_front != 'W':
+                    arr[row+1][col] += round(input_arr[row][col] * prob_forward)
+                if map_left != 'W':
+                    arr[row][col+1] += round(input_arr[row][col] * prob_left)
+                if map_right != 'W':
+                    arr[row][col-1] += round(input_arr[row][col] * prob_right)
+        row +=1
+    
+    # Outputting current matrix
+    current_particle = 0
+    print("\nAfter Motion update and resampling")
+    for row in arr:
+        print(row)
+        current_particle += (sum(row))
+
+    # Fix particle count if changed
+    if current_particle != PARTICLE_NUM:
+        PARTICLE_NUM = current_particle
+        PARTICLE_THRESHOLD = PARTICLE_PERCENT * PARTICLE_NUM
+
     return arr
 
 
 def main():
+    global CURRENT_DIRECTION
+    global PARTICLE_THRESHOLD
     # Cell number based on midpoint of cell coordinates
     coord_to_cell = {(-1.5*SQ_SIZE,1.5*SQ_SIZE):1, (-0.5*SQ_SIZE,1.5*SQ_SIZE):2, (0.5*SQ_SIZE,1.5*SQ_SIZE):3, (1.5*SQ_SIZE,1.5*SQ_SIZE):4,
                 (-1.5*SQ_SIZE,0.5*SQ_SIZE):5, (-0.5*SQ_SIZE,0.5*SQ_SIZE):6, (0.5*SQ_SIZE,0.5*SQ_SIZE):7, (1.5*SQ_SIZE,0.5*SQ_SIZE):8,
@@ -226,25 +279,86 @@ def main():
     '''for row in arr:
         print(row)'''
 
-    readings = [0,1,0]
+    # Simualated reading from sensor
+    # Simulating on map from lab 5
+    # Simulating going from cell 12 up and left to cell 1
+    # Then turning around back to cell 4
+
+    # Cell 12
+    readings = [1,0,1]
     sensor_updated = sensor_update(readings,arr)
-    #motion_updated_arr = motion_update(copy.deepcopy(arr),directions[CURRENT_DIRECTION])
-    #print(motion_updated_arr[row])
-    '''for column in range(len(arr[0])):
-        #print(arr[row][column])
-        pass'''
+    motion_updated = motion_update(sensor_updated)
 
-    '''belief_bar_arr = [[0]*COLUMNS]*ROWS
-    for i in range(len(belief_bar_arr)):
-        for j in range(len(belief_bar_arr)):
-            belief_bar_arr[i][j] = arr[i][j] * motion_updated_arr[i][j]
-        #print(belief_bar_arr[i])
+    # 8
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
 
-    belief_arr = sensor_update(1,1,0,belief_bar_arr,starting_direction)'''
-    '''for row in belief_arr:
-        print(row)'''
+    # 4
+    readings = [0,1,1]
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
 
-    '''basic wall following using lab 3 task 4 code, then use encoders to measure each 18 inches, robot should stop when it
-    it reaches a certain amount of ticks, use right wheel ticks as they are more constant'''
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    CURRENT_DIRECTION = 0
+    readings = [0,0,1]
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    readings = [1,0,1]
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    readings = [1,1,1]
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    # This shows that the sensor should also update when there is a wall in front and before turning
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    # Simulated right turn here to face another wall
+
+    # Another reading before taking right turn
+    readings = [1,1,0]
+    CURRENT_DIRECTION = 1
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    # Simulated right turn here
+
+    # Readings before  continuing forward, still in cell 1
+    readings = [1,0,1]
+    CURRENT_DIRECTION = 2
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    # At cell 2
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    # At cell 3
+    readings = [1,0,0]
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+
+    # At cell 4
+    readings = [1,1,0]
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+    print(PARTICLE_THRESHOLD)
+
+    # Same as before, if wall in front do another resampling before turning
+    sensor_updated = sensor_update(readings,motion_updated)
+    motion_updated = motion_update(sensor_updated)
+    print(PARTICLE_THRESHOLD)
+    
+    '''TODO
+    - Add motion capabilities to move one square
+    - Detect when sensor_updated has a max cell over threshold
+    - Add funtionality to turn right when wall in front and do resampling beforehand
+    - Once localized should be able to output current square as well as coordinates
+    - Naviagate around the rest of the squares once localized'''
 if __name__ == '__main__':
     main()
