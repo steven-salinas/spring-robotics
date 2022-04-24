@@ -1,7 +1,7 @@
 import copy
 import time
 
-'''
+
 import utils
 import signal
 import math
@@ -25,7 +25,7 @@ def ctrlC(signum, frame):
     utils.setSpeedsPWM (1.508,1.5)
     GPIO.cleanup()
     exit()
-'''
+
 
 directions = ['W', 'N', 'E', 'S']
 cell_to_index = {1:(0,0),2:(0,1),3:(0,2),4:(0,3),
@@ -84,7 +84,7 @@ COLUMNS = 4
 # 0 = west, 1 = north, 2 = east, 3 = south
 CURRENT_DIRECTION = 1
 
-def sensor_update(readings,input_arr:list[list[int]]) -> list[list[int]]:
+def sensor_update(readings,input_arr):
     left_reading, front_reading, right_reading = readings[0],readings[1], readings[2]
     arr = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
     arr_sum = 0
@@ -160,6 +160,7 @@ def sensor_update(readings,input_arr:list[list[int]]) -> list[list[int]]:
             arr[row][col] = round(arr[row][col] * PARTICLE_NUM)
             current_particles += arr[row][col]
     
+    # Updating particle number if changed
     if current_particles != PARTICLE_NUM:
         PARTICLE_NUM = current_particles
         PARTICLE_THRESHOLD = PARTICLE_PERCENT * PARTICLE_NUM
@@ -170,6 +171,7 @@ def sensor_update(readings,input_arr:list[list[int]]) -> list[list[int]]:
 
     return arr
 
+# Funcion to return the index with the max number of cells in array
 def get_max_particle(input_arr):
     max_particle = -1
     max_idx = (-1,-1)
@@ -180,6 +182,7 @@ def get_max_particle(input_arr):
                 max_idx = (row,col)
     return max_idx
 
+# Function does motion update based on moving one cell forward
 def motion_update(input_arr):
     global PARTICLE_NUM
     global PARTICLE_THRESHOLD
@@ -262,10 +265,49 @@ def motion_update(input_arr):
 
     return arr
 
+def get_readings():
+    lSensor=utils.lSensor
+    fSensor=utils.fSensor
+    rSensor=utils.rSensor
+    time.sleep(0.2)
+    wall_threshold = 9
+    mmToInch=0.0393701
+    fDistance = fSensor.get_distance()*mmToInch
+    lDistance = lSensor.get_distance()*mmToInch
+    rDistance = rSensor.get_distance()*mmToInch
+    print(lDistance,fDistance,rDistance)
+    readings = [None,None,None]
+    if lDistance < wall_threshold:
+        readings[0] = 1
+    else:
+        readings[0] = 0 
+
+    if fDistance < wall_threshold:
+        readings[1] = 1
+    else:
+        readings[1] = 0
+
+    if rDistance < wall_threshold:
+        readings[2] = 1
+    else:
+        readings[2] = 0
+    return readings
 
 def main():
     global CURRENT_DIRECTION
     global PARTICLE_THRESHOLD
+    global breakFlag
+    global pidL, pidR
+    global lSensor, fSensor, rSensor
+    global startSpeedL, startSpeedR
+
+    breakFlag=False
+    signal.signal(signal.SIGINT, ctrlC)
+    utils.initEncoders()
+    utils.initMotors()
+    utils.initPID(0,0,0)
+    utils.initTOF()
+    
 
     arr = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
     output_arr = [['0','0','0','0'],['0','0','0','0'],['0','0','0','0'],['0','0','0','0']]
@@ -278,7 +320,7 @@ def main():
             arr[i][j]=starting_particles
     
     # Cell 12 or with real robot the first reading
-    readings = [1,0,1]
+    readings = get_readings()
     sensor_updated = sensor_update(readings,arr)
     max_idx = get_max_particle(sensor_updated)
     max_particle = sensor_updated[max_idx[0]][max_idx[1]]
@@ -286,7 +328,6 @@ def main():
     motion_updated = motion_update(sensor_updated)
 
     while max_particle < PARTICLE_THRESHOLD:        
-        '''
         readings = get_readings()
         if readings[1] == 1:
             sensor_updated = sensor_update(readings,motion_updated)
@@ -294,21 +335,20 @@ def main():
             max_particle = sensor_updated[max_idx[0]][max_idx[1]]
 
             motion_updated = motion_update(sensor_updated)
-            turn(90)
+            utils.rotateA(90)
             CURRENT_DIRECTION = (CURRENT_DIRECTION + 1) % 4
         else:
-            moveXV(18)
+            utils.moveXV(18,2)
             sensor_updated = sensor_update(readings,motion_updated)
             max_idx = get_max_particle(sensor_updated)
             max_particle = sensor_updated[max_idx[0]][max_idx[1]]
 
             motion_updated = motion_update(sensor_updated)
-        '''
-
         '''Simulating input from going from cell 12 up to cell 4,
         notice how cell 4 has two readings, as max particle reading is taken
         before turning 90 degrees clockwise'''
-        # Cell 12
+        
+        '''# Cell 12
         readings = [1,0,1]
         sensor_updated = sensor_update(readings,arr)
         max_idx = get_max_particle(sensor_updated)
@@ -340,7 +380,7 @@ def main():
         max_particle = sensor_updated[max_idx[0]][max_idx[1]]
         motion_updated = motion_update(sensor_updated)
         
-        print(max_particle, max_idx)
+        print(max_particle, max_idx)'''
 
         print("END LOCALIZATION HERE")
 
@@ -353,5 +393,6 @@ def main():
     output_arr[max_idx[0]][max_idx[1]] = 'X'
     for row in output_arr:
         print(row)
+    print(get_readings())
 if __name__ == '__main__':
     main()
