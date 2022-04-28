@@ -1,14 +1,10 @@
-import copy
 import time
 import signal
-import math
-import threading
 import matplotlib.pyplot as plt
 
 import PID
 import RPi.GPIO as GPIO # README: https://pypi.org/project/RPi.GPIO/
 import utils
-import collections
 
 def ctrlC(signum, frame):
     global breakFlag
@@ -28,15 +24,17 @@ def ctrlC(signum, frame):
 
 
 
-ROWS = 4
-COLUMNS = 4
-
 # 0 = west, 1 = north, 2 = east, 3 = south
 CURRENT_DIRECTION = 1
 
 
-
 def get_readings():
+    """
+    Gets the readings from the left, front, and right sensor respectively
+    A '1' repsresents a wall while a '0' represents no wall
+    Output - List[left:int,front:int,right:int]
+    """
+
     global fSensor,lSensor,rSensor
 
     time.sleep(0.2)
@@ -97,9 +95,6 @@ def visulize_ordered_map(ordered_map):
 
             visualize_map[neighbor_cell[0]][neighbor_cell[1]]=ordered_map[i][1][delta_idx]
 
-
-
-
     for i in range(len(visualize_map)):
         for j in range(len(visualize_map[0])):
             if visualize_map[i][j]==None:
@@ -111,7 +106,13 @@ def visulize_ordered_map(ordered_map):
 
 
 signal.signal(signal.SIGINT, ctrlC)
+
 def main():
+    """
+    Main function of Lab_6/task1.py
+    This function explores a maze and visualizes the output using mathplotlib.pyplot
+    """
+
     global CURRENT_DIRECTION
     global PARTICLE_THRESHOLD
     global breakFlag
@@ -130,74 +131,14 @@ def main():
     fSensor=utils.fSensor
     rSensor=utils.rSensor
 
-    directions = ['W', 'N', 'E', 'S']
-
-    cell_to_index = {1:(0,0),2:(0,1),3:(0,2),4:(0,3),
-                    5:(1,0),6:(1,1),7:(1,2),8:(1,3),
-                    9:(2,0),10:(2,1),11:(2,2),12:(2,3),
-                    13:(3,0),14:(3,1),15:(3,2),16:(3,3)}
-    #print(cell_to_index[1])
-
-    index_to_cell = {(0,0):1,(0,1):2,(0,2):3,(0,3):4,
-                    (1,0):5,(1,1):6,(1,2):7,(1,3):8,
-                    (2,0):9,(2,1):10,(2,2):11,(2,3):12,
-                    (3,0):13,(3,1):14,(3,2):15,(3,3):16}
-    #print(index_to_cell[0,1])
-
-    # Map of walls based on cell number and facing north
-    # grid_map = {1:'WWOW', 2:'OWOW', 3:'OWOO', 4:'OWWO',
-    #             5:'WWOO', 6:'OWWO', 7:'WOWO', 8:'WOWO',
-    #             9:'WOWO', 10:'WOOW', 11:'OOWW', 12:'WOWO',
-    #             13:'WOOW', 14:'OWOW', 15:'OWOW', 16:'OOWW'}
-
-
-    arr = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
-    output_arr = [['0','0','0','0'],['0','0','0','0'],['0','0','0','0'],['0','0','0','0']]
-    max_particle = -1
-
-    SQ_NUM = ROWS * COLUMNS
-
-
-
-    # Cell 12 or with real robot the first reading
-    # readings = get_readings()
-    # sensor_updated = sensor_update(readings,arr)
-    # max_idx = get_max_particle(sensor_updated)
-    # max_particle = sensor_updated[max_idx[0]][max_idx[1]]
-    # print(max_particle, max_idx)
-
-    # grid_map={ (0,-1):(1,1,1,1)}
     grid_map={}
-    motion_updated = arr
-
     start_position=[0,0]
-
     CURRENT_POSITION=start_position
-
     neighbor_cells_delta=((-1,0),(0,1),(1,0),(0,-1))
 
-    visualize_map=[
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1],
-    ]
-
-    cell_idx_arr=[
-    (7,1),(5,1),(3,1),(1,1),
-    (7,3),(5,3),(3,3),(1,3),
-    (7,5),(5,5),(3,5),(1,5),
-    (7,7),(5,7),(3,7),(1,7),
-    ]
-
+    # Robot will continue exploring until the amount of explored cells is 16
     while len(grid_map)<16:
         readings = get_readings()
-        # readings=[1,0,1]
 
         map_update_value=[None,None,None,None]
 
@@ -219,23 +160,16 @@ def main():
 
         #put map wall values into current position grid
         grid_map[CURRENT_POSITION[0],CURRENT_POSITION[1]]=map_update_value
-        # visualize_map=collections.OrdererdDict(sorted(grid_map.items()))
-
         ordered_map=sorted(grid_map.items())
         print(ordered_map)
 
-
         visulize_ordered_map(ordered_map)
 
-
-
-
-
-        # if readings[1] == 1:
         mmToInch=0.0393701
         fDistance = fSensor.get_distance()*mmToInch
         lDistance = lSensor.get_distance()*mmToInch
         rDistance = rSensor.get_distance()*mmToInch
+
         # fDistance=19
         if fDistance < 18:
             current_angle=utils.getIMUDegrees()
@@ -259,21 +193,9 @@ def main():
             CURRENT_POSITION[0]=neighbor_cells_delta[CURRENT_DIRECTION][0]+CURRENT_POSITION[0]
             CURRENT_POSITION[1]=neighbor_cells_delta[CURRENT_DIRECTION][1]+CURRENT_POSITION[1]
 
-
-
     print("END MAPPING HERE")
     visulize_ordered_map(ordered_map)
     time.sleep(1000000)
 
-
-    # + "going" '''+ directions[CURRENT_DIRECTION]'''
-    '''print("Robot is at: {} going {}".format(cell_to_coord[localized_cell], directions[CURRENT_DIRECTION]))
-    closest_cell = get_closest_unvisited(visited, output_arr,max_idx[0],max_idx[1])
-    print("Finished localizing closest cell to {} is {}".format(localized_cell, closest_cell))
-    wavefront_arr = wavefront(closest_cell)
-    path = get_path(wavefront_arr,localized_cell,closest_cell)
-    print("Path to goal is {}".format(path))'''
-
-        # print(get_readings())
 if __name__ == '__main__':
     main()
