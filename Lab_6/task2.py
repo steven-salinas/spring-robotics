@@ -33,11 +33,13 @@ def ctrlC(signum, frame):
 directions = ['W', 'N', 'E', 'S']
 
 # Map of walls based on cell number and facing north
+# Use string value as array: value[0] = West, value[1] = North, value[2] = East, value[3] = South
 grid_map = {1:'WWOW', 2:'OWOW', 3:'OWOO', 4:'OWWO',
             5:'WWOO', 6:'OWWO', 7:'WOWO', 8:'WOWO',
             9:'WOWO', 10:'WOOW', 11:'OOWW', 12:'WOWO',
             13:'WOOW', 14:'OWOW', 15:'OWOW', 16:'OOWW'}
 
+# Convert from cell number to grid index
 cell_to_index = {1:(0,0),2:(0,1),3:(0,2),4:(0,3),
                 5:(1,0),6:(1,1),7:(1,2),8:(1,3),
                 9:(2,0),10:(2,1),11:(2,2),12:(2,3),
@@ -50,6 +52,13 @@ index_to_cell = {(0,0):1,(0,1):2,(0,2):3,(0,3):4,
                 (3,0):13,(3,1):14,(3,2):15,(3,3):16}
 
 def wavefront(goal):
+    """
+    wavefront function uses wavefront planner to set grid for path planning
+    More information about algorithm here: https://en.wikipedia.org/wiki/Wavefront_expansion_algorithm
+
+    Input - cell_number:int
+    Output - wavefront_arr:List[List[int]]
+    """
     arr = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
     queue = []
     visited = []
@@ -156,7 +165,6 @@ def get_path(input_arr,beginning,goal):
         beginning_arr.append(beginning)
     return path
 
-    print(path)
 def main():
     global CURRENT_DIRECTION
     global breakFlag
