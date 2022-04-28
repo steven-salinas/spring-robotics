@@ -1,5 +1,34 @@
-from calendar import c
+import copy
+import time
 
+
+import utils
+import signal
+import math
+import RPi.GPIO as GPIO # README: https://pypi.org/project/RPi.GPIO/
+
+import PID
+import threading
+
+# 0 = west, 1 = north, 2 = east, 3 = south
+CURRENT_DIRECTION = 1
+
+
+def ctrlC(signum, frame):
+    global breakFlag
+    breakFlag=True
+    print("Ctrl-C caught")
+    utils.setSpeedsPWM (1.508,1.5)
+
+
+    # threadPID.join()
+    print("Exiting")
+
+    lSensor.stop_ranging()
+    fSensor.stop_ranging()
+    rSensor.stop_ranging()
+    GPIO.cleanup()
+    exit()
 
 directions = ['W', 'N', 'E', 'S']
 
@@ -30,7 +59,7 @@ def wavefront(goal):
 
     queue.append(goal)
     visited.append(goal)
-    
+
     while queue:
         current_cell = queue.pop(0)
         current_idx = cell_to_index[current_cell]
@@ -83,7 +112,7 @@ def get_path(input_arr,beginning,goal):
         current_idx = cell_to_index[beginning]
         direction = None
         min_cell = input_arr[current_idx[0]][current_idx[1]]
-        
+
         # Get info for current cell from map
         walls = grid_map[beginning]
 
@@ -104,7 +133,7 @@ def get_path(input_arr,beginning,goal):
                 direction = 1
                 beginning = adjacent_cell
                 min_cell = beginning
-        
+
         # Check East cell
         if walls[2] == 'O':
             adjacent_cell = index_to_cell[current_idx[0],current_idx[1]+1]
@@ -113,7 +142,7 @@ def get_path(input_arr,beginning,goal):
                 direction = 2
                 beginning = adjacent_cell
                 min_cell = beginning
-        
+
         # Check South cell
         if walls[3] == 'O':
             adjacent_cell = index_to_cell[current_idx[0]+1,current_idx[1]]
@@ -123,15 +152,46 @@ def get_path(input_arr,beginning,goal):
                 beginning = adjacent_cell
                 min_cell = beginning
 
-        path.append((beginning_arr[-1],directions[direction]))
+        path.append((beginning_arr[-1],direction))
         beginning_arr.append(beginning)
-    
+    return path
+
     print(path)
 def main():
-    goal = 10
-    beginnning = 3
+    global CURRENT_DIRECTION
+    global breakFlag
+    global pidL, pidR
+    global lSensor, fSensor, rSensor
+    global startSpeedL, startSpeedR
+
+    breakFlag=False
+    signal.signal(signal.SIGINT, ctrlC)
+    utils.initEncoders()
+    utils.initMotors()
+    utils.initPID(0,0,0)
+    utils.initTOF()
+
+    beginning = 10
+    goal = 12
+
     wavefront_arr = wavefront(goal)
-    get_path(wavefront_arr,beginnning,goal)
+    path = get_path(wavefront_arr,beginning,goal)
+    while path:
+        current_angle=utils.getIMUDegrees()
+        rounded_angle=round(current_angle / 90) * 90
+        time.sleep(0.2)
+        current_move = path.pop(0)
+        print("Current move is cell: {} heading {}".format(current_move[0],directions[current_move[1]]))
+
+        if CURRENT_DIRECTION != current_move[1]:
+            '''desired_angle=rounded_angle+90
+            input_angle=desired_angle-current_angle
+            utils.rotateA(input_angle)'''
+            angle = (CURRENT_DIRECTION - current_move[1])*-90
+            #print(angle)
+            utils.rotateA(angle)
+            CURRENT_DIRECTION = current_move[1]
+        utils.moveCell(18,2)
 
 if __name__ == '__main__':
     main()
