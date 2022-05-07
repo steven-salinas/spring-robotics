@@ -113,6 +113,13 @@ def wavefront(goal):
     return arr
 
 def get_path(input_arr,beginning,goal):
+    """
+    get_path is given the array after wavefront() has set its values. It produces an array of
+    tuples with the cell and direction the robot should be going in at that point in the path. 
+
+    input: list[list[int]], int, int
+    output: list[(int,int)]
+    """
     goal_idx = cell_to_index[goal]
     path = []
     visited = []
@@ -166,7 +173,6 @@ def get_path(input_arr,beginning,goal):
     return path
 
 def main():
-    global CURRENT_DIRECTION
     global breakFlag
     global pidL, pidR
     global lSensor, fSensor, rSensor
@@ -179,6 +185,8 @@ def main():
     utils.initPID(0,0,0)
     utils.initTOF()
 
+    # Change initial values here
+    global CURRENT_DIRECTION = 1
     beginning = 10
     goal = 12
 
@@ -192,11 +200,7 @@ def main():
         print("Current move is cell: {} heading {}".format(current_move[0],directions[current_move[1]]))
 
         if CURRENT_DIRECTION != current_move[1]:
-            '''desired_angle=rounded_angle+90
-            input_angle=desired_angle-current_angle
-            utils.rotateA(input_angle)'''
             angle = (CURRENT_DIRECTION - current_move[1])*-90
-            #print(angle)
             utils.rotateA(angle)
             CURRENT_DIRECTION = current_move[1]
         utils.moveCell(18,2)
