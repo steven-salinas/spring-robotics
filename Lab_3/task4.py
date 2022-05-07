@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     fCount=0
     startTime=time.time()
-    while time.time()-startTime<360:
+    while time.time()-startTime<500:
 
 
         fDistance = fSensor.get_distance()*mmToInch

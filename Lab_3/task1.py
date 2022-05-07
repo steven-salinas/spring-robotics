@@ -70,8 +70,8 @@ if __name__ == "__main__":
 
 
 
-    startSpeedL=3
-    startSpeedR=3
+    startSpeedL=-3
+    startSpeedR=-3
 
 
     pidLWall.SetPoint=7
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         timeElapsed=round(timeElapsed,2)
         print("Left: {} Right: {} Front: {} Time Elapsed: {}".format(round(lDistance,2),round(rDistance,2),round(fDistance,2),timeElapsed))
 
-        if fDistance<14:
+        if fDistance>14:
             break
         else:
 

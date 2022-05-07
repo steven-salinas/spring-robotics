@@ -52,7 +52,8 @@ if __name__ == "__main__":
 
 
     #Grab initialized objects from utils
-    pidLWall=PID.PID(1,0,0)
+    pidWall=PID.imuPID(1,0,0)
+
 
 
     lSensor=utils.lSensor
@@ -77,7 +78,8 @@ if __name__ == "__main__":
     startSpeedR=2
 
 
-    pidLWall.SetPoint=7
+    pidWall.SetPoint=0
+
 
 
 
@@ -86,7 +88,7 @@ if __name__ == "__main__":
 
     fCount=0
     startTime=time.time()
-    while time.time()-startTime<30:
+    while time.time()-startTime<500:
 
 
 
@@ -100,22 +102,20 @@ if __name__ == "__main__":
         print("Left: {} Right: {} Front: {} Time Elapsed: {}".format(round(lDistance,2),round(rDistance,2),round(fDistance,2),timeElapsed))
 
         #print(fDistance,lDistance)
-        if fDistance<7:
-
-            utils.rotateA(90)
 
 
-        else:
+        error=lDistance-rDistance
+        pidWall.update(error)
 
+        setSpeedL=-pidWall.output+startSpeedL
+        setSpeedR=pidWall.output+startSpeedR
+        #print(pidLWall.SetPoint,lDistance,pidLWall.output,setSpeedL)
 
-            # if lDistance
-            fCount=0
-            pidLWall.update(lDistance)
-            setSpeedL=pidLWall.output+startSpeedL
-            #print(pidLWall.SetPoint,lDistance,pidLWall.output,setSpeedL)
-            setSpeedL=utils.clamp(setSpeedL,-3,3)
-            utils.setSpeedsIPS(setSpeedL,startSpeedR,False)
-            time.sleep(updateRate)
+        setSpeedL=utils.clamp(setSpeedL,-3,3)
+        setSpeedR=utils.clamp(setSpeedR,-3,3)
+        print(setSpeedL,setSpeedR)
+        utils.setSpeedsIPS(setSpeedL,setSpeedR,False)
+        time.sleep(updateRate)
 
 
     #Body code here -end
