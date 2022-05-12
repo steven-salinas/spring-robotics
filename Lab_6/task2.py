@@ -115,7 +115,7 @@ def wavefront(goal):
 def get_path(input_arr,beginning,goal):
     """
     get_path is given the array after wavefront() has set its values. It produces an array of
-    tuples with the cell and direction the robot should be going in at that point in the path. 
+    tuples with the cell and direction the robot should be going in at that point in the path.
 
     input: list[list[int]], int, int
     output: list[(int,int)]
@@ -186,7 +186,7 @@ def main():
     utils.initTOF()
 
     # Change initial values here
-    global CURRENT_DIRECTION = 1
+    global CURRENT_DIRECTION
     beginning = 10
     goal = 12
 
